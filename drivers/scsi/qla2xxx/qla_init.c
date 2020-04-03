@@ -3001,8 +3001,6 @@ qla24xx_detect_sfp(scsi_qla_host_t *vha)
 			    "Detected Short Range SFP.\n");
 	}
 
-	if (!vha->flags.init_done)
-		rc = QLA_SUCCESS;
 out:
 	return rc;
 }

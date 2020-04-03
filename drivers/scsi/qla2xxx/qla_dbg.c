@@ -2536,13 +2536,29 @@ ql_dbg(uint32_t level, scsi_qla_host_t *vha, int32_t id, const char *fmt, ...)
 	va_list va;
 	struct va_format vaf;
 
-	if (!ql_mask_match(level))
-		return;
-
 	va_start(va, fmt);
 
 	vaf.fmt = fmt;
 	vaf.va = &va;
+
+	if (!ql_mask_match(level)) {
+		char pbuf[64];
+
+		if (vha != NULL) {
+			const struct pci_dev *pdev = vha->hw->pdev;
+			/* <module-name> <msg-id>:<host> Message */
+			snprintf(pbuf, sizeof(pbuf), "%s [%s]-%04x:%ld: ",
+			    QL_MSGHDR, dev_name(&(pdev->dev)), id,
+			    vha->host_no);
+		} else {
+			snprintf(pbuf, sizeof(pbuf), "%s [%s]-%04x: : ",
+			    QL_MSGHDR, "0000:00:00.0", id);
+		}
+		pbuf[sizeof(pbuf) - 1] = 0;
+		trace_ql_dbg_log(pbuf, &vaf);
+		va_end(va);
+		return;
+	}
 
 	if (vha != NULL) {
 		const struct pci_dev *pdev = vha->hw->pdev;

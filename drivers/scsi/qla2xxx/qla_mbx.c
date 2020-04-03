@@ -4593,6 +4593,142 @@ qla25xx_set_driver_version(scsi_qla_host_t *vha, char *version)
 static int
 qla2x00_read_asic_temperature(scsi_qla_host_t *vha, uint16_t *temp)
 {
+	int rval, i;
+	mbx_cmd_t mc;
+	mbx_cmd_t *mcp = &mc;
+	uint32_t	*bp;
+
+	if (!IS_FWI2_CAPABLE(vha->hw))
+		return QLA_FUNCTION_FAILED;
+
+	ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x1159,
+	    "Entered %s.\n", __func__);
+
+	mcp->mb[0] = MBC_GET_RNID_PARAMS;
+	mcp->mb[1] = RNID_TYPE_PORT_LOGIN << 8;
+	mcp->mb[2] = MSW(buf_dma);
+	mcp->mb[3] = LSW(buf_dma);
+	mcp->mb[6] = MSW(MSD(buf_dma));
+	mcp->mb[7] = LSW(MSD(buf_dma));
+	mcp->mb[8] = bufsiz/4;
+	mcp->out_mb = MBX_8|MBX_7|MBX_6|MBX_5|MBX_4|MBX_3|MBX_2|MBX_1|MBX_0;
+	mcp->in_mb = MBX_1|MBX_0;
+	mcp->tov = MBX_TOV_SECONDS;
+	mcp->flags = 0;
+	rval = qla2x00_mailbox_command(vha, mcp);
+
+	if (rval != QLA_SUCCESS) {
+		ql_dbg(ql_dbg_mbx, vha, 0x115a,
+		    "Failed=%x mb[0]=%x,%x.\n", rval, mcp->mb[0], mcp->mb[1]);
+	} else {
+		ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x115b,
+		    "Done %s.\n", __func__);
+		bp = (uint32_t *) buf;
+		for (i = 0; i < (bufsiz-4)/4; i++, bp++)
+			*bp = le32_to_cpu(*bp);
+	}
+
+	return rval;
+}
+
+int
+qla25xx_set_els_cmds_supported(scsi_qla_host_t *vha)
+{
+	int rval;
+	mbx_cmd_t mc;
+	mbx_cmd_t *mcp = &mc;
+	uint8_t *els_cmd_map;
+	dma_addr_t els_cmd_map_dma;
+	uint cmd_opcode = ELS_COMMAND_RDP;
+	uint index = cmd_opcode / 8;
+	uint bit = cmd_opcode % 8;
+	struct qla_hw_data *ha = vha->hw;
+
+	if (!IS_QLA25XX(ha) && !IS_QLA2031(ha) && !IS_QLA27XX(ha))
+		return QLA_SUCCESS;
+
+	ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x1197,
+	    "Entered %s.\n", __func__);
+
+	els_cmd_map = dma_alloc_coherent(&ha->pdev->dev, ELS_CMD_MAP_SIZE,
+	    &els_cmd_map_dma, GFP_KERNEL);
+	if (!els_cmd_map) {
+		ql_log(ql_log_warn, vha, 0x7101,
+		    "Failed to allocate RDP els command param.\n");
+		return QLA_MEMORY_ALLOC_FAILED;
+	}
+
+	els_cmd_map[index] |= 1 << bit;
+
+	mcp->mb[0] = MBC_SET_RNID_PARAMS;
+	mcp->mb[1] = RNID_TYPE_ELS_CMD << 8;
+	mcp->mb[2] = MSW(LSD(els_cmd_map_dma));
+	mcp->mb[3] = LSW(LSD(els_cmd_map_dma));
+	mcp->mb[6] = MSW(MSD(els_cmd_map_dma));
+	mcp->mb[7] = LSW(MSD(els_cmd_map_dma));
+	mcp->out_mb = MBX_7|MBX_6|MBX_3|MBX_2|MBX_1|MBX_0;
+	mcp->in_mb = MBX_1|MBX_0;
+	mcp->tov = MBX_TOV_SECONDS;
+	mcp->flags = MBX_DMA_OUT;
+	mcp->buf_size = ELS_CMD_MAP_SIZE;
+	rval = qla2x00_mailbox_command(vha, mcp);
+
+	if (rval != QLA_SUCCESS) {
+		ql_dbg(ql_dbg_mbx, vha, 0x118d,
+		    "Failed=%x (%x,%x).\n", rval, mcp->mb[0], mcp->mb[1]);
+	} else {
+		ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x118c,
+		    "Done %s.\n", __func__);
+	}
+
+	dma_free_coherent(&ha->pdev->dev, DMA_POOL_SIZE,
+	   els_cmd_map, els_cmd_map_dma);
+
+	return rval;
+}
+
+int
+qla24xx_get_buffer_credits(scsi_qla_host_t *vha, struct buffer_credit_24xx *bbc,
+	dma_addr_t bbc_dma)
+{
+	mbx_cmd_t mc;
+	mbx_cmd_t *mcp = &mc;
+	int rval;
+
+	if (!IS_FWI2_CAPABLE(vha->hw))
+		return QLA_FUNCTION_FAILED;
+
+	ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x118e,
+	    "Entered %s.\n", __func__);
+
+	mcp->mb[0] = MBC_GET_RNID_PARAMS;
+	mcp->mb[1] = RNID_BUFFER_CREDITS << 8;
+	mcp->mb[2] = MSW(LSD(bbc_dma));
+	mcp->mb[3] = LSW(LSD(bbc_dma));
+	mcp->mb[6] = MSW(MSD(bbc_dma));
+	mcp->mb[7] = LSW(MSD(bbc_dma));
+	mcp->mb[8] = sizeof(*bbc) / sizeof(*bbc->parameter);
+	mcp->out_mb = MBX_8|MBX_7|MBX_6|MBX_3|MBX_2|MBX_1|MBX_0;
+	mcp->in_mb = MBX_1|MBX_0;
+	mcp->buf_size = sizeof(*bbc);
+	mcp->flags = MBX_DMA_IN;
+	mcp->tov = MBX_TOV_SECONDS;
+	rval = qla2x00_mailbox_command(vha, mcp);
+
+	if (rval != QLA_SUCCESS) {
+		ql_dbg(ql_dbg_mbx, vha, 0x118f,
+		    "Failed=%x mb[0]=%x,%x.\n", rval, mcp->mb[0], mcp->mb[1]);
+	} else {
+		ql_dbg(ql_dbg_mbx + ql_dbg_verbose, vha, 0x1190,
+		    "Done %s.\n", __func__);
+	}
+
+	return rval;
+}
+
+static int
+qla2x00_read_asic_temperature(scsi_qla_host_t *vha, uint16_t *temp)
+{
 	int rval;
 	mbx_cmd_t mc;
 	mbx_cmd_t *mcp = &mc;
