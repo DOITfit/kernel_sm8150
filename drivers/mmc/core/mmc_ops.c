@@ -883,7 +883,7 @@ static int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
  *	Issued High Priority Interrupt, and check for card status
  *	until out-of prg-state.
  */
-int mmc_interrupt_hpi(struct mmc_card *card)
+static int mmc_interrupt_hpi(struct mmc_card *card)
 {
 	int err;
 	u32 status;
