@@ -802,12 +802,15 @@ static void aead_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 {
 	struct aead_request *req = context;
 	struct aead_edesc *edesc;
+	int ecode = 0;
+	bool has_bklog;
 
 #ifdef DEBUG
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
-	edesc = container_of(desc, struct aead_edesc, hw_desc[0]);
+	edesc = rctx->edesc;
+	has_bklog = edesc->bklog;
 
 	if (err)
 		caam_jr_strstatus(jrdev, err);
@@ -839,12 +842,10 @@ static void aead_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 	/*
 	 * verify hw auth check passed else return -EBADMSG
 	 */
-	if ((err & JRSTA_CCBERR_ERRID_MASK) == JRSTA_CCBERR_ERRID_ICVCHK)
-		err = -EBADMSG;
-
-	kfree(edesc);
-
-	aead_request_complete(req, err);
+	if (!has_bklog)
+		aead_request_complete(req, ecode);
+	else
+		crypto_finalize_aead_request(jrp->engine, req, ecode);
 }
 
 static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
