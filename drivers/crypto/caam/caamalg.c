@@ -850,18 +850,19 @@ static void aead_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 				   void *context)
 {
-	struct ablkcipher_request *req = context;
-	struct ablkcipher_edesc *edesc;
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
-
-#ifdef DEBUG
-	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
-#endif
+	struct skcipher_request *req = context;
+	struct skcipher_edesc *edesc;
+	struct caam_skcipher_req_ctx *rctx = skcipher_request_ctx(req);
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_drv_private_jr *jrp = dev_get_drvdata(jrdev);
+	int ivsize = crypto_skcipher_ivsize(skcipher);
+	int ecode = 0;
+	bool has_bklog;
 
 	edesc = container_of(desc, struct ablkcipher_edesc, hw_desc[0]);
 
+	edesc = rctx->edesc;
+	has_bklog = edesc->bklog;
 	if (err)
 		caam_jr_strstatus(jrdev, err);
 
@@ -929,7 +930,14 @@ static void ablkcipher_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 	ablkcipher_unmap(jrdev, edesc, req);
 	kfree(edesc);
 
-	ablkcipher_request_complete(req, err);
+	/*
+	 * If no backlog flag, the completion of the request is done
+	 * by CAAM, not crypto engine.
+	 */
+	if (!has_bklog)
+		skcipher_request_complete(req, ecode);
+	else
+		crypto_finalize_skcipher_request(jrp->engine, req, ecode);
 }
 
 /*
