@@ -524,10 +524,13 @@ static void ahash_done(struct device *jrdev, u32 *desc, u32 err,
 	int digestsize = crypto_ahash_digestsize(ahash);
 #ifdef DEBUG
 	struct caam_hash_ctx *ctx = crypto_ahash_ctx(ahash);
-	struct caam_hash_state *state = ahash_request_ctx(req);
+	int ecode = 0;
+	bool has_bklog;
 
-	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
-#endif
+	dev_dbg(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
+
+	edesc = state->edesc;
+	has_bklog = edesc->bklog;
 
 	edesc = container_of(desc, struct ahash_edesc, hw_desc[0]);
 	if (err)
@@ -546,7 +549,14 @@ static void ahash_done(struct device *jrdev, u32 *desc, u32 err,
 			       digestsize, 1);
 #endif
 
-	req->base.complete(&req->base, err);
+	/*
+	 * If no backlog flag, the completion of the request is done
+	 * by CAAM, not crypto engine.
+	 */
+	if (!has_bklog)
+		req->base.complete(&req->base, ecode);
+	else
+		crypto_finalize_hash_request(jrp->engine, req, ecode);
 }
 
 static void ahash_done_bi(struct device *jrdev, u32 *desc, u32 err,
@@ -594,11 +604,15 @@ static void ahash_done_ctx_src(struct device *jrdev, u32 *desc, u32 err,
 #ifdef DEBUG
 	struct caam_hash_ctx *ctx = crypto_ahash_ctx(ahash);
 	struct caam_hash_state *state = ahash_request_ctx(req);
+	int digestsize = crypto_ahash_digestsize(ahash);
+	int ecode = 0;
+	bool has_bklog;
 
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
-	edesc = container_of(desc, struct ahash_edesc, hw_desc[0]);
+	edesc = state->edesc;
+	has_bklog = edesc->bklog;
 	if (err)
 		caam_jr_strstatus(jrdev, err);
 
@@ -610,10 +624,18 @@ static void ahash_done_ctx_src(struct device *jrdev, u32 *desc, u32 err,
 		       DUMP_PREFIX_ADDRESS, 16, 4, state->caam_ctx,
 		       ctx->ctx_len, 1);
 	if (req->result)
-		print_hex_dump(KERN_ERR, "result@"__stringify(__LINE__)": ",
-			       DUMP_PREFIX_ADDRESS, 16, 4, req->result,
-			       digestsize, 1);
-#endif
+		print_hex_dump_debug("result@"__stringify(__LINE__)": ",
+				     DUMP_PREFIX_ADDRESS, 16, 4, req->result,
+				     digestsize, 1);
+
+	/*
+	 * If no backlog flag, the completion of the request is done
+	 * by CAAM, not crypto engine.
+	 */
+	if (!has_bklog)
+		req->base.complete(&req->base, ecode);
+	else
+		crypto_finalize_hash_request(jrp->engine, req, ecode);
 
 	req->base.complete(&req->base, err);
 }
