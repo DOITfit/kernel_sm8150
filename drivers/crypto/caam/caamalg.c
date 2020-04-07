@@ -1733,14 +1733,48 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 	edesc->iv_dir = DMA_FROM_DEVICE;
 
 	/* Make sure IV is located in a DMAable area */
-	iv = (u8 *)edesc->hw_desc + desc_bytes + sec4_sg_bytes;
-	iv_dma = dma_map_single(jrdev, iv, ivsize, DMA_FROM_DEVICE);
-	if (dma_mapping_error(jrdev, iv_dma)) {
-		dev_err(jrdev, "unable to map IV\n");
-		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents, 0,
-			   0, DMA_NONE, 0, 0);
-		kfree(edesc);
-		return ERR_PTR(-ENOMEM);
+	if (ivsize) {
+		iv = (u8 *)edesc->sec4_sg + sec4_sg_bytes;
+		memcpy(iv, req->iv, ivsize);
+
+		iv_dma = dma_map_single(jrdev, iv, ivsize, DMA_BIDIRECTIONAL);
+		if (dma_mapping_error(jrdev, iv_dma)) {
+			dev_err(jrdev, "unable to map IV\n");
+			caam_unmap(jrdev, req->src, req->dst, src_nents,
+				   dst_nents, 0, 0, 0, 0);
+			kfree(edesc);
+			return ERR_PTR(-ENOMEM);
+		}
+
+		dma_to_sec4_sg_one(edesc->sec4_sg, iv_dma, ivsize, 0);
+	}
+	if (dst_sg_idx)
+		sg_to_sec4_sg(req->src, req->cryptlen, edesc->sec4_sg +
+			      !!ivsize, 0);
+
+	if (req->src != req->dst && (ivsize || mapped_dst_nents > 1))
+		sg_to_sec4_sg(req->dst, req->cryptlen, edesc->sec4_sg +
+			      dst_sg_idx, 0);
+
+	if (ivsize)
+		dma_to_sec4_sg_one(edesc->sec4_sg + dst_sg_idx +
+				   mapped_dst_nents, iv_dma, ivsize, 0);
+
+	if (ivsize || mapped_dst_nents > 1)
+		sg_to_sec4_set_last(edesc->sec4_sg + dst_sg_idx +
+				    mapped_dst_nents - 1 + !!ivsize);
+
+	if (sec4_sg_bytes) {
+		edesc->sec4_sg_dma = dma_map_single(jrdev, edesc->sec4_sg,
+						    sec4_sg_bytes,
+						    DMA_TO_DEVICE);
+		if (dma_mapping_error(jrdev, edesc->sec4_sg_dma)) {
+			dev_err(jrdev, "unable to map S/G table\n");
+			caam_unmap(jrdev, req->src, req->dst, src_nents,
+				   dst_nents, iv_dma, ivsize, 0, 0);
+			kfree(edesc);
+			return ERR_PTR(-ENOMEM);
+		}
 	}
 
 	if (mapped_src_nents > 1)
