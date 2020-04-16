@@ -523,7 +523,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return rc;
 		}
 	}
-#ifdef CONFIG_THERMAL
+
 	if (of_find_property(node, "qcom,thermal-mitigation-dcp", &byte_len)) {
 		chg->thermal_mitigation_dcp = devm_kzalloc(chg->dev, byte_len,
 			GFP_KERNEL);
@@ -770,7 +770,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return rc;
 		}
 	}
-#else
+
 	if (of_find_property(node, "qcom,thermal-mitigation", &byte_len)) {
 		chg->thermal_mitigation = devm_kzalloc(chg->dev, byte_len,
 			GFP_KERNEL);
@@ -789,7 +789,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return rc;
 		}
 	}
-#endif
+
 	rc = of_property_read_u32(node, "qcom,charger-temp-max",
 			&chg->charger_temp_max);
 	if (rc < 0)
