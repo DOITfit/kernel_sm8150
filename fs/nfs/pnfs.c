@@ -1302,12 +1302,14 @@ retry:
 	layoutreturn = pnfs_prepare_layoutreturn(lo, &stateid, &iomode);
 	/* If the creds don't match, we can't compound the layoutreturn */
 	if (!layoutreturn || cred != lo->plh_lc_cred)
+	if (!layoutreturn || cred_fscmp(cred, lc_cred) != 0)
 		goto out_noroc;
 
 	roc = layoutreturn;
 	pnfs_init_layoutreturn_args(args, lo, &stateid, iomode);
 	res->lrs_present = 0;
 	layoutreturn = false;
+	put_cred(lc_cred);
 
 out_noroc:
 	spin_unlock(&ino->i_lock);
