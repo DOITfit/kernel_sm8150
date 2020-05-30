@@ -7769,10 +7769,10 @@ int dsi_display_post_enable(struct dsi_display *display)
 
 	if (display->panel->cur_mode->dsi_mode_flags & DSI_MODE_FLAG_POMS) {
 		if (display->config.panel_mode == DSI_OP_CMD_MODE)
-			dsi_panel_mode_switch_to_cmd(display->panel);
+			(display->panel);
 
 		if (display->config.panel_mode == DSI_OP_VIDEO_MODE)
-			dsi_panel_mode_switch_to_vid(display->panel);
+			(display->panel);
 	} else {
 		rc = dsi_panel_post_enable(display->panel);
 		if (rc)
@@ -7807,10 +7807,10 @@ int dsi_display_pre_disable(struct dsi_display *display)
 
 	if (display->poms_pending) {
 		if (display->config.panel_mode == DSI_OP_CMD_MODE)
-			dsi_panel_pre_mode_switch_to_video(display->panel);
+			(display->panel);
 
 		if (display->config.panel_mode == DSI_OP_VIDEO_MODE)
-			dsi_panel_pre_mode_switch_to_cmd(display->panel);
+			(display->panel);
 	} else {
 		rc = dsi_panel_pre_disable(display->panel);
 		if (rc)
