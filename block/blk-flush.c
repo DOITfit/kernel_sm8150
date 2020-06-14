@@ -576,7 +576,6 @@ void blkdev_issue_flush_nowait(struct block_device *bdev, gfp_t gfp_mask)
 		return;
 
 	bio = bio_alloc(gfp_mask, 0);
-	bio->bi_bdev = bdev;
 	bio->bi_opf = REQ_OP_WRITE | REQ_PREFLUSH;
 
 	submit_bio_nowait(bio);
