@@ -445,7 +445,7 @@ void input_event(struct input_dev *dev,
 		input_handle_event(dev, type, code, value);
 		spin_unlock_irqrestore(&dev->event_lock, flags);
 
-		sde_crtc_touch_notify();
+		sde_crtc_touch_notify;
 	}
 }
 EXPORT_SYMBOL(input_event);
